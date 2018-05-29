@@ -51,3 +51,19 @@ stored and retrieved.
 
 The program can be used for training, evaluating, and making predictions on
 single images.
+
+*	[cnn_cifar.py](./cnn_cifar.py) has the same functionalities as
+ 	[scnn_cifar.py](./scnn_cifar.py) but does not need the Slim library,
+	the neural network is build using TensorFlow primitives, organized in
+	[cnn.py](./cnn.py)
+
+The reason for this slim-free code is that a CIFAR classifier that uses only
+TensorFlow primitives may be more straightforward to be embedded in nengo
+models.
+
+The parametes defining the neural architecture, collected in the dictionary
+`nn_arch`, can be imported from the external file [neural_arch.py](./neural_arch.py),
+so to make easier experimenting with different parameters.
+
+The global variables `model_dir` and `model_name` defines the directory Cand the
+names checkpoints.
