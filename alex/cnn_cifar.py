@@ -48,7 +48,7 @@ nn_arch         = {                     # overall network definition
 model_dir       = "./model_dir"
 model_name      = "mycifar"
 learning_rate   = 0.001
-epochs          = 20
+epochs          = 200
 
 
 def setup_cifar():
