@@ -5,6 +5,8 @@ and generate a new dataset
 the full CIFAR100 dataset can be downloaded with
 curl -O http://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz
 
+there are 500 images in the training set for each class, and 100 images in the test set
+
 alex    May 2018
 
 """
@@ -166,7 +168,7 @@ def select_samples( dset, n=10 ):
 
     for img, lab in zip( d, l ):
         if cnt[ lab ]:
-            name        = "{:s}_{:02d}.png".format( classes[ lab ], cnt[ lab ] )
+            name        = "{:s}_{:03d}.png".format( classes[ lab ], cnt[ lab ] )
             save_png( img, name )
             cnt[ lab ]  -= 1
         if not cnt.sum():
