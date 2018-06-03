@@ -8,16 +8,19 @@ the network architecture is defined using TensorFlow slim
 Examples of usage:
 
 # training:
+setup()
 data_set        = read_data_sets()
 images, labels  = data_set[ 'train' ]
-train_nn( images, labels, num_epochs=500 )
+train_nn( images, labels )
 
 # recall:
+setup()
 session         = tf.Session()
 nn              = restore_nn( session )
 recall( session, nn, "cifar_png/plate_01.png" )
 
 # evaluate:
+setup()
 data_set        = read_data_sets()
 images, labels  = data_set[ 'test' ]
 session         = tf.Session()
@@ -26,6 +29,7 @@ acc             = evaluate( session, nn, images, labels )
 
 
 alex    May 2018
+        Jun 2018 - several small adjustments to make the model readable as nengo.TensorNode
 
 """
 
@@ -38,6 +42,7 @@ import  sys
 import  tensorflow              as tf
 import  tensorflow.contrib.slim as slim
 from    tensorflow.python.framework import dtypes
+from    PIL                         import Image
 
 import  select_cifar
 
@@ -45,7 +50,10 @@ import  select_cifar
 """
 main globals
 """
-verbose     = 1                     # verbose level
+verbose         = 1                 # verbose level
+num_epochs      = 1000              # number of learning epochs
+learning_rate   = 0.0001           # learning rate
+batch_size      = 512               # size to training batches
 
 nn_arch     = {                     # overall network definition
     "color"         : True,         # color images
@@ -60,12 +68,13 @@ nn_arch     = {                     # overall network definition
         "alpha"         : 0.001 / 9.0,
         "beta"          : 0.75
     },                              
-    "out_layer"     : ( 256, 128 ), # number of neurons in the outer layers
+    "full_layer"    : ( 256, 128 ), # number of neurons in the outer layers
     "classes"       : None,         # classe names
     "n_class"       : None,         # number of classes
 }
 
 model_dir   = "./model_dir"
+
 
 def setup_cifar():
     """
@@ -73,6 +82,19 @@ def setup_cifar():
     """
     nn_arch[ "classes" ]    = select_cifar.classes
     nn_arch[ "n_class" ]    = len( select_cifar.classes )
+
+
+def import_arch():
+    """
+    import an external network definition
+    """
+    global nn_arch
+    try:
+        import neural_arch
+        nn_arch     = neural_arch.nn_arch
+        return True
+    except ImportError:
+        return False
 
 
 def dense_to_one_hot( l ):
@@ -136,11 +158,40 @@ def read_data_sets():
     return data_set
 
 
+def read_image( image ):
+    """
+    read an image from file
+    """
+    if not tf.gfile.Exists( image ):
+        tf.logging.fatal( 'File does not exist %s', image )
+        return None
+    i       = Image.open( image )
+    w, h    = i.size
+    d       = numpy.array( i.getdata(), dtype=numpy.uint8 )
+    img     = norm_images( d )
+    return img.reshape( 1, h, w, 3 )
+
+
+def setup( external=True ):
+    """
+    set up main variables
+    """
+    if external:
+        if not import_arch():
+            if verbose:
+                print "warning: no external neural architecture definition found, using internal"
+    setup_cifar()
+    if not os.path.isdir( model_dir ):
+        os.mkdir( model_dir )
+        if verbose:
+            print( "model directory " + model_dir + " missing, created" )
+
+
 def setup_nn( inputs, dropout_probability=0.5 ):
     """
     set up the network using slim calls
     requires as inputs the same kind of inputs (tensors with images) that will be given
-    to the netword while training, and as labels
+    to the netword while training or recalling
     """
 
     # move this in a more comprehensive sanity check function of nn_arch
@@ -153,33 +204,29 @@ def setup_nn( inputs, dropout_probability=0.5 ):
     w, h        = nn_arch[ 'image_size' ]
     cls         = nn_arch[ 'n_class' ]
     chn         = 3 if nn_arch[ 'color' ] else 1
-    nn          = inputs    # just for init
-    print( "shape on first layer", nn.shape )
+    nn          = inputs
 
     with slim.arg_scope( [ slim.conv2d, slim.fully_connected ],
                       activation_fn         = tf.nn.relu,
                       weights_initializer   = tf.truncated_normal_initializer( stddev=0.1 ) ):
-#        with slim.arg_scope( [ slim.conv2d, slim.max_pool2d ], padding='SAME' ):
         with slim.arg_scope( [ slim.fully_connected ], biases_initializer=tf.constant_initializer(0.1) ):
-            # conv + maxpool layers
-            for f, m, p, s in zip( nn_arch[ 'features' ], nn_arch[ 'mask_size' ],
-                    nn_arch[ 'pool_size' ], nn_arch[ 'pool_stride' ] ):
-                nn  = slim.conv2d( nn, f, [ m, m], scope=( 'conv_' + str( cnt ) ) )
-                nn  = slim.max_pool2d( nn, [ p, p ], stride=s, scope=( 'pool_' + str( cnt ) ) )
-                print( "shape on layer %d" % cnt, nn.shape )
+            for f, m, p, s, r in zip( nn_arch[ 'features' ], nn_arch[ 'mask_size' ],
+                    nn_arch[ 'pool_size' ], nn_arch[ 'pool_stride' ], nn_arch[ 'norm' ] ):
+                nn  = slim.conv2d( nn, f, [ m, m], scope=( 'conv_{}'.format( cnt ) ) )
+                nn  = slim.max_pool2d( nn, [ p, p ], stride=s, scope=( 'pool_{}'.format( cnt ) ) )
+                if r is not None:
+                    r[ 'name' ] = 'norm_{}'.format( cnt )
+                    nn  = tf.nn.lrn( nn, **r )
                 cnt += 1
 
-            # fully connected + dropout layers
             nn  = slim.flatten( nn )
-            for out in nn_arch[ 'out_layer' ]:
-                nn  = slim.fully_connected( nn, out, scope=( 'full_' + str( cnt ) ) )
-                nn  = slim.dropout( nn, dropout_probability, scope=( 'drop_' + str( cnt ) ) )
-                print( "shape on layer %d" % cnt, nn.shape )
+            for out in nn_arch[ 'full_layer' ]:
+                nn  = slim.fully_connected( nn, out, scope=( 'full_{}'.format( cnt ) ) )
+                nn  = slim.dropout( nn, dropout_probability, scope=( 'drop_{}'.format( cnt ) ) )
                 cnt += 1
 
-            # final layer
-            nn  = slim.fully_connected( nn, cls, activation_fn=None, scope=( 'full_' + str( cnt ) ) )
-            print( "shape on final layer %d" % cnt, nn.shape )
+            nn  = slim.fully_connected( nn, cls, biases_initializer=tf.zeros_initializer(), scope="out_layer" )
+            nn  = slim.softmax( nn, scope="softmax_out" )
 
     return nn
 
@@ -188,9 +235,9 @@ def train_nn(
         images,
         labels,
         out_path        = model_dir,
-        learning_rate   = 0.0001,
-        num_epochs      = 10,
-        batch_size      = 64,
+        learning_rate   = learning_rate,
+        num_epochs      = num_epochs,
+        batch_size      = batch_size,
         save=True ):
     """
     train the network - note that the network definition is included here
@@ -215,7 +262,7 @@ def train_nn(
         loss        = slim.losses.softmax_cross_entropy( nn, lbls )
         total_loss  = slim.losses.get_total_loss()
         tf.summary.scalar( 'losses/total_loss', total_loss )
-        optimizer   = tf.train.GradientDescentOptimizer( learning_rate )
+        optimizer   = tf.train.AdamOptimizer( learning_rate )
         train_op    = slim.learning.create_train_op( total_loss, optimizer )
 
         slim.learning.train(
@@ -248,51 +295,78 @@ def restore_nn( session, model_dir=model_dir, chck_file=None ):
     """
     w, h    = nn_arch[ 'image_size' ]
     chn     = 3 if nn_arch[ 'color' ] else 1
-    img     = tf.placeholder( dtype=tf.float32, shape=( None, w, h, chn ), name="input" )
-    nn      = setup_nn( img, dropout_probability=1.0 )
+    x       = tf.placeholder( dtype=tf.float32, shape=( None, w, h, chn ), name="input" )
+    y       = setup_nn( x, dropout_probability=1.0 )
     chk     = get_chck( model_dir, chck_file )
-    svr     = tf.train.Saver()
-    svr.restore( session, chk )
-    return nn
+    rst     = slim.assign_from_checkpoint_fn( chk, slim.get_model_variables() )
+    rst( session )
+    return { 'x' : x, 'y' : y }
 
 
-def recall( session, nn, image, label=None ):
+def print_2class( probabilities ):
+    """
+    print the top two classifications
+    """
+    cl  = nn_arch[ 'classes' ]
+    inx = probabilities.argsort()
+    c1  = cl[ inx[ -1 ] ]
+    p1  = probabilities[ inx[ -1 ] ]
+    c2  = cl[ inx[ -2 ] ]
+    p2  = probabilities[ inx[ -2 ] ]
+    print( "image classified as   {:20s} with probability {:6.4f}".format( c1, p1 ) )
+    print( "second possibility is {:20s} with probability {:6.4f}".format( c2, p2 ) )
+
+
+def classify( session, nn, image, label=None ):
     """
     recall the network for a single image, which should be a path name for an image file
+    nn is the dictionary with input and output tensors, as returned by restore_nn,
+    and print the classification, togehter with the ground truth, if provided
+    """
+    r   = recall( session, nn, image )
+    pr  = 1 + ( r[ 0 ] - r.max() ) / r.ptp()
+    pr  = pr / pr.sum()
+    if verbose:
+        print_2class( pr )
+        if label is not None:
+            print( "ground truth is " + nn_arch[ 'classes' ][ int( label ) ] )
+    return pr
+
+
+def recall( session, nn, image ):
+    """
+    recall the network for a single image, which should be a path name for an image file
+    nn is the dictionary with input and output tensors, as returned by restore_nn
     """
     if not isinstance( image, str ):
         print( "Error in recall: invalid image " + str( image ) )
         return None
-    cl      = nn_arch[ 'classes' ]
     w, h    = nn_arch[ 'image_size' ]
     chn     = 3 if nn_arch[ 'color' ] else 1
     idata   = tf.gfile.FastGFile( image, 'rb' ).read()
     img     = tf.image.decode_image( idata )
     i       = img.eval( session=session ).reshape( 1, w, h, chn )
 
-    r   = session.run( nn, feed_dict={ "input:0": i } )
-    nr  = 1 + ( r[ 0 ] - r.max() ) / r.ptp()
-    nr  = nr / nr.sum()
-    inx = nr.argsort()
-    print( "image classified as   " + cl[ inx[ -1 ] ] + " with probability " + str( nr[ inx[ -1 ] ] ) )
-    print( "second possibility is " + cl[ inx[ -2 ] ] + " with probability " + str( nr[ inx[ -2 ] ] ) )
-    if label is not None:
-        print( "ground truth is " + cl[ int( label ) ] )
+    return session.run( nn[ 'y' ], feed_dict={ nn[ 'x' ]: i } )
 
 
 def evaluate( session, nn, images, labels ):
     """
     evaluate the network over a batch of images and labels
     """
-    r       = session.run( nn, feed_dict={ "input:0": images } )
+    r       = session.run( nn[ 'y' ], feed_dict={ nn[ 'x' ]: images } )
     pred    = tf.argmax( r, 1 )
     labs    = tf.argmax( labels, 1 )
     acc, op = tf.metrics.accuracy( labs, pred )
-    tf.global_variables_initializer().run( session=session )
-    tf.local_variables_initializer().run( session=session )
+    graph   = tf.get_default_graph()
+    mvars   = graph.get_collection( 'metric_variables' )
+    tf.variables_initializer( mvars ).run( session=session )
     session.run( [ acc, op ] )
     return session.run( [ acc ] )[ 0 ]
 
-
-
-setup_cifar()
+#
+# training:
+setup()
+data_set        = read_data_sets()
+images, labels  = data_set[ 'train' ]
+train_nn( images, labels )
