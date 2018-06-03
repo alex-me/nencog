@@ -363,10 +363,3 @@ def evaluate( session, nn, images, labels ):
     tf.variables_initializer( mvars ).run( session=session )
     session.run( [ acc, op ] )
     return session.run( [ acc ] )[ 0 ]
-
-#
-# training:
-setup()
-data_set        = read_data_sets()
-images, labels  = data_set[ 'train' ]
-train_nn( images, labels )
