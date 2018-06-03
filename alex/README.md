@@ -67,3 +67,14 @@ so to make easier experimenting with different parameters.
 
 The global variables `model_dir` and `model_name` defines the directory Cand the
 names checkpoints.
+
+## Integrating TensorFlow and nengo
+
+*	[spa_scnn.py](./spa_scnn.py) is a simple nengo model that integrates
+	scnn_cifar.py connecting its logits to SPA nengo nodes
+ 	for a classifer on the personalized subset of CIFAR-100 images
+
+Note that this stage has been troublesome, and standard TensorFlow graphs
+gneretate many errors whtn cast as `nengo_dl.TensorNode`, at the end only the
+slim model [scnn_cifar.py](./scnn_cifar.py), with several adjustments, was
+imported without errors.
