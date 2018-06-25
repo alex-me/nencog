@@ -19,6 +19,12 @@ session         = tf.Session()
 nn              = restore_nn( session )
 recall( session, nn, "cifar_png/plate_01.png" )
 
+# classification recall:
+setup()
+session         = tf.Session()
+nn              = restore_nn( session )
+classify( session, nn, "cifar_png/plate_01.png" )
+
 # evaluate:
 setup()
 data_set        = read_data_sets()
@@ -341,11 +347,7 @@ def recall( session, nn, image ):
     if not isinstance( image, str ):
         print( "Error in recall: invalid image " + str( image ) )
         return None
-    w, h    = nn_arch[ 'image_size' ]
-    chn     = 3 if nn_arch[ 'color' ] else 1
-    idata   = tf.gfile.FastGFile( image, 'rb' ).read()
-    img     = tf.image.decode_image( idata )
-    i       = img.eval( session=session ).reshape( 1, w, h, chn )
+    i       = read_image( image )
 
     return session.run( nn[ 'y' ], feed_dict={ nn[ 'x' ]: i } )
 
