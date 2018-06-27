@@ -81,12 +81,12 @@ imported without errors.
 
 ## Towards linguistic representation of the scene
 
-*	[spa_scnn.py](./obj2_scnn.py) is a simple nengo model that takes
+*	[obj2_scnn.py](./obj2_scnn.py) is a simple nengo model that takes
 	two images as input, and attempts to connect the objects seen in
 	a sentence, using as connectors prepositions.
-	It is based on spa_scnn.py, with additional vocabularies, and the
-	extension of the Tensorflow section to capture an arbitrary number of
-	images
+	It is based on [spa_scnn.py](./spa_scnn.py), with additional
+	vocabularies, and the extension of the Tensorflow section to capture an
+	arbitrary number of images
 
 
 An example of usage, inside an intepreter, for example `ipython -i
