@@ -78,3 +78,30 @@ Note that this stage has been troublesome, and standard TensorFlow graphs
 gneretate many errors whtn cast as `nengo_dl.TensorNode`, at the end only the
 slim model [scnn_cifar.py](./scnn_cifar.py), with several adjustments, was
 imported without errors.
+
+## Towards linguistic representation of the scene
+
+*	[spa_scnn.py](./obj2_scnn.py) is a simple nengo model that takes
+	two images as input, and attempts to connect the objects seen in
+	a sentence, using as connectors prepositions.
+	It is based on spa_scnn.py, with additional vocabularies, and the
+	extension of the Tensorflow section to capture an arbitrary number of
+	images
+
+
+An example of usage, inside an intepreter, for example `ipython -i
+obj2_scnn.py`:
+```python
+
+# do a preliminary setup
+setup()
+
+# uses predefined filenames of images
+images = ( test_i1, test_i2 )
+
+# recall the network model on these images
+r = recall_nn( images )
+
+# display the most likely sentence
+pr_sent( r )
+```
