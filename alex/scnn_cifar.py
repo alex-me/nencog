@@ -45,6 +45,7 @@ import  gzip
 import  os
 import  numpy
 import  sys
+import  logging
 import  tensorflow              as tf
 import  tensorflow.contrib.slim as slim
 from    tensorflow.python.framework import dtypes
@@ -58,8 +59,10 @@ main globals
 """
 verbose         = 1                 # verbose level
 num_epochs      = 1000              # number of learning epochs
-learning_rate   = 0.0001           # learning rate
+learning_rate   = 0.0001            # learning rate
 batch_size      = 512               # size to training batches
+background      = False             # run in background
+log_file        = "scnn_cifar.log"  # logging filename
 
 nn_arch     = {                     # overall network definition
     "color"         : True,         # color images
@@ -182,6 +185,8 @@ def setup( external=True ):
     """
     set up main variables
     """
+    if background:
+        verbose = 0
     if external:
         if not import_arch():
             if verbose:
@@ -250,6 +255,9 @@ def train_nn(
     requires as inputs and labels the training set
     most of the function deals with creating a queue of batches feeding the training
     """
+
+    if background:
+        logging.basicConfig( filename=log_file, filemode='w', level=logging.INFO )
 
     n_batch     = images.shape[ 0 ] / batch_size
     capacity    = 5 * batch_size
