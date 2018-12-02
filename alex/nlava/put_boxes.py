@@ -98,6 +98,7 @@ def annotate_image( annotation ):
     for o, b in zip( obj, box ):
         draw_box( img_box, b, colors[ o ] )
     img.save( f_out )
+    return f_out
 
 
 def annotate_images( annotations ):
