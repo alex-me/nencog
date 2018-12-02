@@ -60,11 +60,37 @@ LAVA objects. The program includes functions to perform training, testing,
 single image recall, batch recall. 
 The trained models are stored in the directory [model_dir](./model_dir/).
 
-*	[cnn_lava.py](./search_lava.py) performs object searching on full LAVA
+In order to train one of the categories you can run the program inside an
+interpreter, for example `ipython -i cnn_lava.py`, and execute the following
+expressions:
+
+```python
+category    = 'person'
+setup( category=category )
+train_nn( category=category )
+```
+
+*	[search_lava.py](./search_lava.py) performs object searching on full LAVA
 images for a single object or for multiple objects, calling functions of
 [cnn_lava.py](./cnn_lava.py), and returns list with the most probable boxes
 embedding the objects. It can also generate images annotated with the boxes
-found in overlay, using the functions of [put_boxes.py](./put_boxes.py).
+found in overlay, using the functions of [put_boxes.py](./put_boxes.py), the
+annotated images are stored in the directory `./images`.
 
+This progam has a `main()`, so it can be used to process a single image, like in
+this example:
 
+```shell
+python search_lava.py 00044-11090-11190
+```
 
+where the argument is the name of a LAVA image (without extension), you should
+ensure that the variable `ldir` is set to the corret pathname of LAVA images.
+
+Executing the program without arguments:
+
+```shell
+python search_lava.py
+```
+the object search is performed on all LAVA images that have been used to
+annotation, the list is retrieved by call to `put_boxes.read_annotations()`.
