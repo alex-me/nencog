@@ -3,97 +3,62 @@
 ## sources maintained by alex
 
 
-## utilities for managing the LAVA dataset
+## Keras models for the identification of LAVA relevant objects
 
-### Lava Corpus
-Language and Vision Ambiguities (LAVA) is a multimodal corpus that supports the
-study of ambiguous language grounded in vision, see Yevgeni Berzak, Andrei
-Barbu, Daniel Harari, Boris Katz and Shimon Ullman (2015). *Do You See What I
-Mean? Visual Resolution of Linguistic Ambiguities* for reference
+Since version 2.2.0 of [nengo_dl](https://www.nengo.ai/nengo-dl/) Nengo can
+accept [Keras](https://keras.io/) models as `TensorNode` nodes, and since Keras
+is the most compact and easy format for TensorFlow models, it is worth moving to
+this solution, abandoning the previous [TensorFlow based convolutional
+models](../README.md).
 
-*	[labeled_images.py](./labeled_images.py) is used to list the images with
- 	labels from the original json file of the dataset
+*	[arch.py](./arch.py) is the main library of Keras primitives for
+building models that can be specified using [simple configuration
+files](config/README.md). Models are made conbining arbitrary sequences of four
+types of Keras layers: convolutions, dense, pooling, and flattening layers.
+The last layer of the models is alwyas a binary classificator, since we are
+interesting in searching for specifc predefined objects inside a LAVA image.
 
-### Sample extraction
-All useful images hase been manually annotated for the presence of significant
-objects, together with their embedding box, data are stored in
-[coords.txt](./coords/coords.txt)
+*	[trainer.py](./trainer.py) is the package that take care of running the
+training of a model defined by [arch.py](./arch.py) saving the best weights in a
+[HDF5 binary](https://www.hdfgroup.org/) file format. Saved models are in
+[./model_dir](./model_dir/README.md).
 
-*	[put_boxes.py](./put_boxes.py) scan all images annotated in
-[coords.txt](./coords/coords.txt) and generated the corresponding images with
-boxes in overlay
+*	[cnfg.py](./cnfg.py) is a small modul that handles [configuration files](config/README.md).
 
-*	[coord_stat.py](./coord_stat.py) produces a statistics of the boxes
-embedding objects in the vairous categories
+*	[mesg.py](./mesg.py) handles messages, allowing redirection of `stdout`,
+useful when training on a remote GPU machine.
 
-*	[extract_samples.py](./extract_samples.py) extract all samples
-
-*	[extract_no_samples.py](./extract_no_samples.py) extract samples that do
-not contain objects of the relevant categories, to be used by the neural
-segmentation
-
-### Generation of datasets
-The samples extracted are then organized into datasets, ready to be used for
-training network models on the categories of objects of interest.
-
-*	[pack_lava.py](./pack_lava.py) pack samples into datasets - note that
-less samples than those available are packed into datasets, due to limitations
-in the pickle protocols, and in the critical usage of RAM.
-The datasets are stored in the directory [data](./data/).
-
-
-## CNN models for the identification of relevant objects (NOTE: obsolete)
-
-**the following files are kept here for documentation of the research, but the
-current development has moved on [Keras-based models](./keras/README.md)**
-
-*	[cnn.py](./cnn.py) is the library of TensorFlow primitives for building
-models, that is a copy of [cnn.py](../my_cifar/cnn.py) already used in the
-experiments with [a CIFAR-100 selection](../my_cifar/README.md), adapted for the
-use with LAVA images, and for the task of searching objects.
-
-Since TF models built with [cnn.py](../my_cifar/cnn.py) were succesfully
-integrated in Nengo, there is hope that the integration for the LAVA models will
-be smooth.
-
-*	[cnn_lava.py](./cnn_lava.py) is a higher level of NN modeling that uses
-[cnn.py](./cnn.py), customized for LAVA objects and datasets, and allows for
-the simujltaneous use of multiple TF graphs and sessions, each for a catagory of
-LAVA objects. The program includes functions to perform training, testing,
-single image recall, batch recall. 
-The trained models are stored in the directory [model_dir](./model_dir/).
-
-In order to train one of the categories you can run the program inside an
-interpreter, for example `ipython -i cnn_lava.py`, and execute the following
-expressions:
-
-```python
-category    = 'person'
-setup( category=category )
-train_nn( category=category )
-```
-
-*	[search_lava.py](./search_lava.py) performs object searching on full LAVA
-images for a single object or for multiple objects, calling functions of
-[cnn_lava.py](./cnn_lava.py), and returns list with the most probable boxes
-embedding the objects. It can also generate images annotated with the boxes
-found in overlay, using the functions of [put_boxes.py](./put_boxes.py), the
-annotated images are stored in the directory `./images`.
-
-This progam has a `main()`, so it can be used to process a single image, like in
-this example:
+*	[pack_lava.py](../pack_lava.py) is part of the [LAVA utilities](../README.md)
+and is used by [trainer.py](./trainer.py) and [exec_main.py](exec_main.py) for
+setting specifications about the LAVA datasets for each object category.
+It is necessary to create a symbolic link to this module:
 
 ```shell
-python search_lava.py 00044-11090-11190
+ln -s ../pack_lava.py
 ```
 
-where the argument is the name of a LAVA image (without extension), you should
-ensure that the variable `ldir` is set to the corret pathname of LAVA images.
-
-Executing the program without arguments:
+*	[exec_main.py](exec_main.py) is the main for training and saving the
+Keras models of LAVA objects. Its usage can be obtained with:
 
 ```shell
-python search_lava.py
+python exec_main.py -h
 ```
-the object search is performed on all LAVA images that have been used to
-annotation, the list is retrieved by call to `put_boxes.read_annotations()`.
+
+A typical execution uses the following arguments:
+
+```shell
+python exec_main.py -c config/BAG -g '0,' -f '0.5' -Tssr
+```
+
+Where `-c config/BAG` tells the program to build a model based on the
+configuration file `config/BAG` (which obviously refers to the object BAG), 
+`-g '0,'` instruct TensorFlow to use the first available GPU, and `-f '0.5'`
+specifies to use up to half of the GPU available memory. Note that GPU
+specification is a tuple (for example with `-g '2,3,4,'` you will use multiple
+GPUs), if you specify the number `0` (i.e. `-g 0`) the program will not attempt
+to use any GPU and train on CPU instead. The flags `-Tssr` instruct to perform
+the training, to save along the model also the configuration file and all the
+sources, and to write messages on a log file, redirecting `stdout`.
+
+The trained model, along with the additional information on the model, are
+stored in the folder `res` and in a unique subfolder named by the time stamp.
