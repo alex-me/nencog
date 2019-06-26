@@ -42,7 +42,10 @@ in the pickle protocols, and in the critical usage of RAM.
 The datasets are stored in the directory [data](./data/).
 
 
-## CNN models for the identification of relevant objects
+## CNN models for the identification of relevant objects (NOTE: obsolete)
+
+**the following files are kept here for documentation of the research, but the
+current development has moved on [Keras-based models](./keras/README.md)**
 
 *	[cnn.py](./cnn.py) is the library of TensorFlow primitives for building
 models, that is a copy of [cnn.py](../my_cifar/cnn.py) already used in the
