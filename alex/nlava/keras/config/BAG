@@ -1,0 +1,58 @@
+# ===================================================================================================================================================== #
+#
+#	ARCHITECTURE
+#
+# ===================================================================================================================================================== #
+
+seed			1
+
+# order of layers in the architecture (check 'layer_code' nn_arch.py for the dict of considered chars)
+# note that there are actually 1 dense layer less than in the model (the classification layer is not included)
+arch_layout		'CCCFDD'
+
+# this computation is fixed, but must be here
+n_conv             	cnfg[ 'arch_layout' ].count( layer_code[ 'conv' ] )    	# total num of convolutions
+n_pool             	cnfg[ 'arch_layout' ].count( layer_code[ 'pool' ] )    	# total num of pooling
+n_dnse             	cnfg[ 'arch_layout' ].count( layer_code[ 'dnse' ] )    	# total num of dense
+
+ref_model		None							# folder containing or the filename of the HDF5 reference model
+
+k_initializer		'HE'							# RUNIF / GLOROT / HE - type of convolution initializer
+k_regularizer		'NONE'							# L2 / NONE - type of convolution regularizer
+
+img_size            	[ 128, 256, 3 ]						# height, width, channels of input images
+
+# -----	CONVOLUTIONS ---------------------------------------------------------------------------------------------------------------------------------- #
+conv_filters        	[ 16, 32, 8 ]						# number of kernels for each convolution
+conv_kernel_size    	[ 7, 3, 3 ]						# size of (square) kernels for each convolution
+conv_strides	    	cnfg[ 'n_conv' ] * [ 2 ]				# stride for each convolution
+conv_padding	   	cnfg[ 'n_conv' ] * [ 'same' ]				# same / valid - padding for each convolution
+conv_activation	    	cnfg[ 'n_conv' ] * [ 'relu' ]				# sigmoid / relu - activation function for each convolution
+conv_train		cnfg[ 'n_conv' ] * [ True ]				# False to freeze weights of each convolution during training 
+
+pool_size	   	[]							# pooling size
+
+# -----	DENSE LAYERS ---------------------------------------------------------------------------------------------------------------------------------- #
+dnse_size	    	[ 512, 256 ]						# size of each dense layer - last value is fixed to 2 in the code
+										# as it will be automatically computed
+dnse_activation		cnfg[ 'n_dnse' ] * [ 'relu' ]				# sigmoid / relu - activation function for each dense layer
+dnse_train		cnfg[ 'n_dnse' ] * [ True ]				# False to freeze weights of each dense layer during training
+
+
+# ===================================================================================================================================================== #
+#
+#	TRAINING
+#
+# ===================================================================================================================================================== #
+
+dir_dset            	"../data/lava_bag.gz"					# dataset of images
+data_class		'bag' 						# person / chair / bag / telescope
+
+n_epochs            	1000							# number of epochs 
+batch_size          	128							# size of minibatches
+lrate			2e-07							# learning rate
+optimizer		'ADAM'							# ADAM / RMS / SDG / ADAGRAD - optimizer
+
+n_check                 1							# 0 = do nothing / 1 = save best model / n = save n checkpoints
+patience		0							# end training after 'patience' unsuccessful epochs
+tboard			False							# call TensorBoard during training
