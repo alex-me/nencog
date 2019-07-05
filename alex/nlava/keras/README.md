@@ -20,8 +20,7 @@ interesting in searching for specifc predefined objects inside a LAVA image.
 
 *	[trainer.py](./trainer.py) is the package that take care of running the
 training of a model defined by [arch.py](./arch.py) saving the best weights in a
-[HDF5 binary](https://www.hdfgroup.org/) file format. Saved models are in
-[./model_dir](./model_dir/README.md).
+[HDF5 binary](https://www.hdfgroup.org/) file format.
 
 *	[cnfg.py](./cnfg.py) is a small modul that handles [configuration files](config/README.md).
 
@@ -62,3 +61,31 @@ sources, and to write messages on a log file, redirecting `stdout`.
 
 The trained model, along with the additional information on the model, are
 stored in the folder `res` and in a unique subfolder named by the time stamp.
+
+
+## integrated Keras-Nengo models for the LAVA diambiguation task
+
+*	[kn.py](kn.py) is the first working integration of the models in Keras
+defined and trained with [exec_main.py](exec_main.py).
+The program expect to find the necessary Keras models in the folder
+[./model_dir](./model_dir/README.md).
+
+The Nengo model, defined with the class `Nn`, instantiate special nodes of the
+class `Kinter` that interface the Keras models through `nengo_dl.TensorNode`.
+There are as many `Kinter` nodes as the different categories of objects to be
+found in a LAVA scene.
+
+There are two main exectuive functions:
+*	`recall_sentence()` read a sentence, and
+recall the nengo/keras model on all subwindows of the relevant image, for the
+categories of objects mentioned in the sentence, and returns the list of
+coordinates where the objects have been found with highest probability.
+*	`disambiguate()` read also a sentence and triggers the nengo/keras model,
+in addition to `recall_sentence()` it process the coordinates of the hits for
+guessing the correct syntax. Note that this final part is _not_ a neural
+process.
+
+*Note:* there is currently no working interface to Keras in the stable version
+of nengo-dl, it is necessary to download and install the development version
+`2.2.0.dev0`
+
