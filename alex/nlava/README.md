@@ -8,8 +8,9 @@
 ### Lava Corpus
 Language and Vision Ambiguities (LAVA) is a multimodal corpus that supports the
 study of ambiguous language grounded in vision, see Yevgeni Berzak, Andrei
-Barbu, Daniel Harari, Boris Katz and Shimon Ullman (2015). *Do You See What I
-Mean? Visual Resolution of Linguistic Ambiguities* for reference
+Barbu, Daniel Harari, Boris Katz and Shimon Ullman (2015).
+[*Do You See What I Mean? Visual Resolution of Linguistic Ambiguities*](https://arxiv.org/abs/1603.08079)
+for reference
 
 *	[labeled_images.py](./labeled_images.py) is used to list the images with
  	labels from the original json file of the dataset
@@ -45,7 +46,9 @@ The datasets are stored in the directory [data](./data/).
 ## CNN models for the identification of relevant objects (NOTE: obsolete)
 
 **the following files are kept here for documentation of the research, but the
-current development has moved on [Keras-based models](./keras/README.md)**
+current development has moved on
+[Keras-based models](./keras/README.md)
+and [Nengo-Keras integrated models](./kspa/README.md)**
 
 *	[cnn.py](./cnn.py) is the library of TensorFlow primitives for building
 models, that is a copy of [cnn.py](../my_cifar/cnn.py) already used in the
