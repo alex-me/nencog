@@ -51,6 +51,8 @@ shapes      = {
     'telescope' :   None
 }
 
+x_coordinates   =   []                      # the coordinates common to all categories, along X
+
 
 def set_coords( category='person' ):
     """
@@ -80,12 +82,19 @@ def setup():
     """
     perform a general setup, executing set_coords() for all cetagories
     """
+    global x_coordinates
+
     for c in categories:
         xy, nxy             = set_coords( c )
         n                   = nxy[ 0 ] * nxy[ 1 ]
         coordinates[ c ]    = xy
         n_coords[ c ]       = nxy
         shapes[ c ]         = ( n, sizes[ c ][ 1 ], sizes[ c ][ 0 ], 3 )
+
+    x               = list( set( [ c[ 0 ] for c in coordinates[ 'person' ] ] ) )
+    x.sort()
+    x_coordinates   = x
+
 
 
 def scan_image( img, category='person' ):

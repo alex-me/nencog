@@ -37,6 +37,11 @@ subwindows of the proper size for the different categories of objects. It is
 derived from [search_lava.py](../search_lava.py), but specialized for the
 requirements of [kspa_model.py](./kspa_model.py).
 
+*	[display_lava.py](./display_lava.py) is a utility for displaying the
+probability function for an object in a LAVA image, as detected by the Keras
+models. It uses the same reduction of probabilities from the two dimensions of
+the image to the horizontal dimesions as in [kspa_model.py](./kspa_model.py).
+
 *	[exec_kspa.py](./exec_kspa.py) is the main script, that executes the
 Nengo model defined in [kspa_model.py](./kspa_model.py)
 
