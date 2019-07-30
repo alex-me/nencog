@@ -13,11 +13,12 @@ import  os
 import  sys
 import  numpy
 
-from keras.models   import load_model
-from matplotlib     import pyplot
-from matplotlib     import image
+from keras.models       import load_model
+from matplotlib         import pyplot
+from matplotlib         import image
+from scipy.interpolate  import make_interp_spline
 
-import  lava_geo    as lg
+import  lava_geo        as lg
 
 verbose     = 1                                     # verbose level
 image_size  = ( 720, 540 )                          # size of LAVA images
@@ -25,7 +26,10 @@ models      = {}                                    # dictionary with Keras mode
 mod_dir     = "../keras/model_dir"                  # directory with Keras models
 img_dir     = "images"                              # directory where to write images
 mname       = "nn_best.h5"                          # standard name of model file
-plot_scale  = 200                                   # scaling factor for probability plots
+plot_scale  = 180                                   # scaling factor for probability plots
+img_pl_sep  = 0.4                                   # fraction of separation between image and plot
+npoints     = 200                                   # number of points for spline interpolation
+k_spline    = 3                                     # spline interpolation order
 colors      = {                                     # colors for plots
     'person'    : '#3cb371',
     'chair'     : '#ff69b4',
@@ -71,12 +75,12 @@ def recall_batch( images, category ):
     return r
 
 
-def scale_plot( y ):
+def scale_plot( y, offset=0 ):
     """
     scale the plots of detection probability so to display well
     under the image
     """
-    y0      = 1.1 * plot_scale + image_size[ 1 ]
+    y0      = offset + ( 1. + img_pl_sep ) * plot_scale + image_size[ 1 ]
     return  y0 - plot_scale * y
 
 
@@ -105,16 +109,22 @@ def show_searches( fname ):
     """
     show results of a search of multiple categories by overlaying boxes on the image
     """
-    x           = lg.x_coordinates
+    xc          = lg.x_coordinates
+    x           = numpy.linspace( xc[ 0 ], xc[ -1 ], npoints )
     fin, fout   = fnames( fname )
     img         = image.imread( fin )
     objs        = search_objs( fname )
     fig, ax = pyplot.subplots()
     ax.imshow( img )
-    for c in objs.keys():
-        y   = scale_plot( objs[ c ] )
-        pyplot.plot( x, y, color=colors[ c ] )
+    for o, c in enumerate( objs.keys() ):
+        yc  = objs[ c ]
+        sp  = make_interp_spline( xc, yc, k=k_spline )
+        y   = sp( x )
+        y   = y.clip( min=0 )
+        y   = scale_plot( y, offset=2*o )
+        pyplot.plot( x, y, color=colors[ c ], label=c )
     pyplot.axis( 'off' )
+    pyplot.legend( fontsize='xx-small', loc=4, bbox_to_anchor=(1.0, 0.2) )
     pyplot.savefig( fout, bbox_inches='tight', dpi=200, pad_inches=0.01 )
     pyplot.close()
     if verbose:
