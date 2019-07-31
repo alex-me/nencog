@@ -344,3 +344,45 @@ def disambiguate( sentence ):
     sim             = recall_nn( img )
     hit             = find_ambigue( sim, comp, amb )
     return amb[ hit ], comp
+
+
+def init_stat( comp=( 'bag', 'telescope' ) ):
+    """
+    initialize the data structures used by evaluate()
+    comp should include all the possible categories that play the role of complements
+    of the prepositions
+    the structure class_res is a dictionary with 3 levels:
+        - the level of all the possible complements
+        - the level of all the possible true categories associate to the complements
+        - the level of all the possible predicted categories associate to the complements
+    the values at the inner level will be the number of counts, initially are 0
+    """
+    class_res   = {}
+    amb         = []
+
+    for c in lg.categories:
+        if c in comp: continue
+        amb.append( c )
+
+    for c in comp:
+        class_res[ c ]  = {}
+        for t in amb:
+            class_res[ c ][ t ] = {}
+            for p in amb:
+                class_res[ c ][ t ][ p ] = 0
+    
+    return class_res
+
+
+def evaluate( sentences, truths ):
+    """
+    given a list of LAVA sentences and a list of corresponding ground truths, evaluate
+    the accuracy of the model
+    """
+    res     = init_stat()
+
+    for s, t in zip( sentences, truths ):
+        p, comp                 = disambiguate( s )
+        res[ comp ][ t ][ p ]   += 1
+
+    return res

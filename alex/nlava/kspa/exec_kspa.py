@@ -28,6 +28,15 @@ def get_args():
     parser      = argparse.ArgumentParser()
 
     parser.add_argument(
+            '-e',
+            '--eval',
+            action          = 'store',
+            dest            = 'EVAL',
+            type            = str,
+            default         = None,
+            help            = "Pathname of file with groud truths, should be used with --load"
+    )
+    parser.add_argument(
             '-l',
             '--load',
             action          = 'store',
@@ -92,9 +101,78 @@ def get_args():
     return vars( parser.parse_args() )
 
 
+def read_files():
+    """ -----------------------------------------------------------------------------------------------------
+    read files for evaluation mode
+    
+    return:         [tuple of lists] sentences and ground truths
+    ----------------------------------------------------------------------------------------------------- """
+    sentences   = []
+    truths      = []
+    with open( args[ 'LOAD' ] ) as fin:
+        for line in fin:
+            sentences.append( line )
+    with open( args[ 'EVAL' ] ) as fin:
+        for i, line in enumerate( fin ):
+            img, t  = line.split()
+            img1    = sentences[ i ].split()[ 0 ]
+            if img == img1:
+                truths.append( t )
+    if not len( truths ):
+        print( "Error: no correpondence found between sentences and ground truths" )
+        sys.exit()
+
+    return sentences, truths
+
+
+def pwrite( s, fout=None ):
+    """ -----------------------------------------------------------------------------------------------------
+    print the string s or write on file if fout is a file descriptor
+    ----------------------------------------------------------------------------------------------------- """
+    if fout is None:
+        print( s )
+    else:
+        fout.write( s + '\n' )
+
+
+def print_eval( ref, fout=None ):
+    """ -----------------------------------------------------------------------------------------------------
+    print the results of the evaluation, on file if fout is a file descriptor
+    ----------------------------------------------------------------------------------------------------- """
+    tacc    = 0
+    ttot    = 0
+    for comp in ref.keys():
+        acc     = 0
+        tot     = 0
+        pwrite( comp.center( 40, '-' ), fout=fout )
+        truths  = tuple( ref[ comp ].keys() )
+        header  = 10 * ' ' + '{:^10}{:^10}'.format( *truths )
+        pwrite( header, fout=fout )
+        for t in truths:
+            s   = '{:^10}'.format( t )
+            for p in truths:
+                s       += '{:^10d}'.format( ref[ comp ][ t ][ p ] )
+                tot     += ref[ comp ][ t ][ p ]
+                ttot    += ref[ comp ][ t ][ p ]
+                if t == p:
+                    acc     += ref[ comp ][ t ][ p ]
+                    tacc    += ref[ comp ][ t ][ p ]
+            pwrite( s, fout=fout )
+        pwrite( 40 * '-', fout=fout )
+        pwrite( "accuracy: {:^6.4f}".format( acc / tot ), fout=fout )
+        pwrite( 40 * '-' + '\n', fout=fout )
+    pwrite( "total accuracy: {:^6.4f}".format( tacc / ttot ), fout=fout )
+    pwrite( 40 * '-' + '\n', fout=fout )
+                
+            
+
 
 if __name__ == '__main__':
     args    = get_args()
+
+    if args[ 'EVAL' ] is not None and args[ 'LOAD' ] is None:
+        print( "Error: in order to evaluate you should supply a file with sentences, using --load" )
+        sys.exit()
 
     if args[ 'METHOD' ] not in kspa_model.methods:
         print( "Error: method {} not implemented".format( args[ 'METHOD' ] ) )
@@ -112,17 +190,23 @@ if __name__ == '__main__':
         if not os.path.isfile( args[ 'LOAD' ] ):
             print( "Error: file {} not found".format( args[ 'LOAD' ] ) )
             sys.exit()
+        fout    = None
         if args[ 'OUTPUT' ] is not None:
-            f   = open( args[ 'OUTPUT' ], 'w' )
-        with open( args[ 'LOAD' ] ) as fin:
-            for line in fin:
-                res = kspa_model.disambiguate( line )
-                r   = res[ 0 ] + args[ 'SEPARATOR' ] + res[ 1 ]
-                if args[ 'OUTPUT' ] is not None:
-                    f.write( r + '\n' )
-                else:
-                    print( r )
+            fout    = open( args[ 'OUTPUT' ], 'w' )
+        if args[ 'EVAL' ] is None:
+            with open( args[ 'LOAD' ] ) as fin:
+                for line in fin:
+                    res = kspa_model.disambiguate( line )
+                    r   = res[ 0 ] + args[ 'SEPARATOR' ] + res[ 1 ]
+                    if args[ 'OUTPUT' ] is not None:
+                        fout.write( r + '\n' )
+                    else:
+                        print( r )
+        else:
+            sentences, truths   = read_files()
+            class_res           = kspa_model.evaluate( sentences, truths )
+
         if args[ 'OUTPUT' ] is not None:
-            f.close()
+            fout.close()
         
                 
