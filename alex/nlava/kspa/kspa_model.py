@@ -346,7 +346,7 @@ def disambiguate( sentence ):
     return amb[ hit ], comp
 
 
-def init_stat( comp=( 'bag', 'telescope' ) ):
+def init_stat( comp=( 'bag', 'telescope' ), amb=( 'bag', 'person', 'chair' ) ):
     """
     initialize the data structures used by evaluate()
     comp should include all the possible categories that play the role of complements
@@ -358,17 +358,14 @@ def init_stat( comp=( 'bag', 'telescope' ) ):
     the values at the inner level will be the number of counts, initially are 0
     """
     class_res   = {}
-    amb         = []
-
-    for c in lg.categories:
-        if c in comp: continue
-        amb.append( c )
 
     for c in comp:
         class_res[ c ]  = {}
         for t in amb:
+            if t == c: continue
             class_res[ c ][ t ] = {}
             for p in amb:
+                if p == c: continue
                 class_res[ c ][ t ][ p ] = 0
     
     return class_res

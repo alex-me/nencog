@@ -146,7 +146,8 @@ def print_eval( ref, fout=None ):
         tot     = 0
         pwrite( comp.center( 40, '-' ), fout=fout )
         truths  = tuple( ref[ comp ].keys() )
-        header  = 10 * ' ' + '{:^10}{:^10}'.format( *truths )
+        fmt     = 10 * ' ' + len( truths ) * '{:^10}'
+        header  = fmt.format( *truths )
         pwrite( header, fout=fout )
         for t in truths:
             s   = '{:^10}'.format( t )
@@ -159,9 +160,11 @@ def print_eval( ref, fout=None ):
                     tacc    += ref[ comp ][ t ][ p ]
             pwrite( s, fout=fout )
         pwrite( 40 * '-', fout=fout )
-        pwrite( "accuracy: {:^6.4f}".format( acc / tot ), fout=fout )
-        pwrite( 40 * '-' + '\n', fout=fout )
-    pwrite( "total accuracy: {:^6.4f}".format( tacc / ttot ), fout=fout )
+        if tot:
+            pwrite( "accuracy: {:^6.4f}".format( acc / tot ), fout=fout )
+            pwrite( 40 * '-' + '\n', fout=fout )
+    if ttot:
+        pwrite( "total accuracy: {:^6.4f}".format( tacc / ttot ), fout=fout )
     pwrite( 40 * '-' + '\n', fout=fout )
                 
             
