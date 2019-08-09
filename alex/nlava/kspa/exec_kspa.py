@@ -208,6 +208,7 @@ if __name__ == '__main__':
         else:
             sentences, truths   = read_files()
             class_res           = kspa_model.evaluate( sentences, truths )
+            print_eval( class_res, fout=fout )
 
         if args[ 'OUTPUT' ] is not None:
             fout.close()
