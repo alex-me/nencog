@@ -15,7 +15,7 @@ for reference
 *	[labeled_images.py](./labeled_images.py) is used to list the images with
  	labels from the original json file of the dataset
 
-### Sample extraction
+### sample extraction
 All useful images hase been manually annotated for the presence of significant
 objects, together with their embedding box, data are stored in
 [coords.txt](./coords/coords.txt)
@@ -33,7 +33,7 @@ embedding objects in the vairous categories
 not contain objects of the relevant categories, to be used by the neural
 segmentation
 
-### Generation of datasets
+### generation of datasets
 The samples extracted are then organized into datasets, ready to be used for
 training network models on the categories of objects of interest.
 
@@ -41,6 +41,12 @@ training network models on the categories of objects of interest.
 less samples than those available are packed into datasets, due to limitations
 in the pickle protocols, and in the critical usage of RAM.
 The datasets are stored in the directory [data](./data/).
+
+*	NOTE that there is an alternative specific for Keras models, that
+instead of a single file to be read in memory, generates symbolic links to all
+samples, in a directory structure compliant with Keras
+[flow_from_directory](https://keras.io/preprocessing/image/) method, see
+[in ./keras/](keras/README.md).
 
 
 ## CNN models for the identification of relevant objects (NOTE: obsolete)
