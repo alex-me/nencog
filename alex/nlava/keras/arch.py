@@ -184,13 +184,10 @@ class Classifier( ABC ):
 
         return:         [keras.regularizers.Regularizer]
         ------------------------------------------------------------------------------------------------- """
-        if self.k_regularizer == 'L2':
-            return regularizers.l2( 0 )     # FIXME REGUL WITH FACTOR=0 MAKES NO SENSE!
+        if self.k_regularizer > 0.0:
+            return regularizers.l2( self.k_regularizer )
 
-        if self.k_regularizer == 'NONE':
-            return None
-
-        ms.print_err( "Regularizer {} not valid".format( self.k_regularizer ) )
+        return None
 
 
 
@@ -338,6 +335,11 @@ class Classifier( ABC ):
             else:
                 ms.print_err( "Layer code '{}' not valid".format( layer ) )
 
+        # CLASSIFICATION LAYER
+        # NOTE: it supposes that the first value is the probability that there is an object
+        # and the second one the probability that there is no object
+        # this is in fact a binary classification, but has been left as a two-class structure
+        # for compatibility
         c               = layers.Dense( 2, activation='softmax', name='class' )( x )
 
         return models.Model(
