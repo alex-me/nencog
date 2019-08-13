@@ -18,7 +18,7 @@ n_dnse             	cnfg[ 'arch_layout' ].count( layer_code[ 'dnse' ] )    	# to
 ref_model		None							# folder containing or the filename of the HDF5 reference model
 
 k_initializer		'HE'							# RUNIF / GLOROT / HE - type of convolution initializer
-k_regularizer		'NONE'							# L2 / NONE - type of convolution regularizer
+k_regularizer		0.0							# regularizer wieght (0.0 for None)
 
 img_size            	[ 128, 256, 3 ]						# height, width, channels of input images
 
