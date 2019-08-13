@@ -371,15 +371,20 @@ def init_stat( comp=( 'bag', 'telescope' ), amb=( 'bag', 'person', 'chair' ) ):
     return class_res
 
 
-def evaluate( sentences, truths ):
+def evaluate( sentences, truths, full=None ):
     """
     given a list of LAVA sentences and a list of corresponding ground truths, evaluate
     the accuracy of the model
+    if full is not None, it is assumed as the file descriptor where writing full report
+    of the evaluation
     """
     res     = init_stat()
 
     for s, t in zip( sentences, truths ):
         p, comp                 = disambiguate( s )
         res[ comp ][ t ][ p ]   += 1
+        if full is not None:
+            s   = s.strip().replace( '\t', ' ' )
+            full.write( "{:80s}{:10s}{:10s}\t{}\n".format( s, p, t, t==p ) )
 
     return res

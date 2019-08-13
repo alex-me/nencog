@@ -37,6 +37,15 @@ def get_args():
             help            = "Pathname of file with groud truths, should be used with --load"
     )
     parser.add_argument(
+            '-f',
+            '--full',
+            action          = 'store',
+            dest            = 'FULL',
+            type            = str,
+            default         = None,
+            help            = "Pathname of file with full results, should be used with --eval"
+    )
+    parser.add_argument(
             '-l',
             '--load',
             action          = 'store',
@@ -177,6 +186,10 @@ if __name__ == '__main__':
         print( "Error: in order to evaluate you should supply a file with sentences, using --load" )
         sys.exit()
 
+    if args[ 'FULL' ] is not None and args[ 'EVAL' ] is None:
+        print( "Error: full report is produced in evaluation mode only, you should use --eval" )
+        sys.exit()
+
     if args[ 'METHOD' ] not in kspa_model.methods:
         print( "Error: method {} not implemented".format( args[ 'METHOD' ] ) )
         sys.exit()
@@ -206,11 +219,16 @@ if __name__ == '__main__':
                     else:
                         print( r )
         else:
+            full    = None
+            if args[ 'FULL' ] is not None:
+                full    = open( args[ 'FULL' ], 'w' )
             sentences, truths   = read_files()
-            class_res           = kspa_model.evaluate( sentences, truths )
+            class_res           = kspa_model.evaluate( sentences, truths, full=full )
             print_eval( class_res, fout=fout )
 
         if args[ 'OUTPUT' ] is not None:
             fout.close()
+        if args[ 'FULL' ] is not None:
+            full.close()
         
                 
