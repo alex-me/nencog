@@ -34,6 +34,84 @@ cnfg            = []        # NOTE initialized by 'nn_main.py'
 dir_check       = 'chkpnt'
 nn_best         = 'nn_best.h5'
 
+file_ext        = ( '.png', '.jpg', '.jpeg' )
+data_ext        = '.gz'
+cond_ext        = lambda x: x.lower().endswith( file_ext )      # the condition an image file must satisfy
+cond_mem        = lambda x: x.lower().endswith( data_ext )      # the condition of dataset on memory
+
+
+def iter_simple( dr, shuffle=True ):
+    """ -----------------------------------------------------------------------------------------------------
+    Simple generic dataset iterator
+
+    https://keras.io/preprocessing/image/#imagedatagenerator-methods
+
+    dr:             [str] folder of dataset (it must contain a subfolder for each class)
+    shuffle:        [bool] whether to shuffle the data
+
+    return:         [keras_preprocessing.image.DirectoryIterator]
+    ----------------------------------------------------------------------------------------------------- """
+    
+    # 'rescale' to normalize pixels in [0..1]
+    idg     = preprocessing.image.ImageDataGenerator( rescale=1./255 )
+
+    flow    = idg.flow_from_directory(
+            directory   = dr,
+            target_size = cnfg[ 'img_size' ][ :-1 ],
+            color_mode  = 'rgb',
+            class_mode  = 'categorical',
+            classes     = [ 'yes', 'no' ],
+            batch_size  = cnfg[ 'batch_size' ],
+            shuffle     = shuffle,
+            seed        = cnfg[ 'seed' ]
+    )
+
+    return flow
+
+
+def gen_dataset( dir_dset ):
+    """ -----------------------------------------------------------------------------------------------------
+    Iterate over a training and a validation set, where target images are equal to input images
+
+    dir_dset:       [str] folder of dataset (subfolders must include train/valid)
+
+    return:         [list] of keras_preprocessing.image.DirectoryIterator
+    ----------------------------------------------------------------------------------------------------- """
+    train_dir   = os.path.join( dir_dset, 'train' )
+    valid_dir   = os.path.join( dir_dset, 'valid' )
+
+    train_flow  = iter_simple( train_dir, shuffle=True )
+    valid_flow  = iter_simple( valid_dir, shuffle=True )
+
+    return train_flow, valid_flow
+
+
+def len_dataset( dir_dset ):
+    """ -----------------------------------------------------------------------------------------------------
+    Return the number of samples in each subset (train/valid/test) of a dataset
+
+    dir_dset:       [str] folder of dataset (subfolders must include train/valid)
+
+    return:         [list of int]
+    ----------------------------------------------------------------------------------------------------- """
+    train   = None
+    valid   = None
+    test    = None
+
+    for dirpath, dirname, filename in os.walk( dir_dset ):
+        if not dirname:
+            if "train" in dirpath:
+                train   = dirpath
+            elif "valid" in dirpath:
+                valid   = dirpath
+            elif "test" in dirpath:
+                test    = dirpath
+
+    tr  = len( [ f for f in os.listdir( train ) if cond_ext( f ) ] )
+    vl  = len( [ f for f in os.listdir( valid ) if cond_ext( f ) ] )
+    ts  = len( [ f for f in os.listdir( test ) if cond_ext( f ) ] )
+
+    return tr, vl, ts
 
 
 def split_valid( data, n ):
@@ -52,7 +130,7 @@ def split_valid( data, n ):
 
 def read_data_set():
     """
-    read the dataset of a object category, split into teain and valid, and
+    read the dataset of a object category, split into train and valid, and
     reorganize into the format used by cnn
     """
     f       = cnfg[ 'dir_dset' ]
@@ -122,12 +200,40 @@ def set_callback():
 
 
 
-def train_model( model, tlog ):
+def train_from_disk( model ):
     """ -----------------------------------------------------------------------------------------------------
-    Training procedure for model predicting in time
+    Training procedure with data from disk
 
     model:          [keras.engine.training.Model]
-    tlog:           [str] path to log file
+
+    return:         [keras.callbacks.History]
+    ----------------------------------------------------------------------------------------------------- """
+
+    # train and valid dataset generators
+    train_feed, valid_feed                      = gen_dataset( cnfg[ 'dir_dset' ] )
+    train_samples, valid_samples, test_samples  = len_dataset( cnfg[ 'dir_dset' ] )
+    steps_per_epoch                             = ceil( train_samples / cnfg[ 'batch_size' ] )
+    validation_steps                            = ceil( valid_samples / cnfg[ 'batch_size' ] )
+
+    history                 = model.fit_generator(
+            train_feed,
+            epochs              = cnfg[ 'n_epochs' ],
+            validation_data     = valid_feed,
+            steps_per_epoch     = steps_per_epoch,
+            validation_steps    = validation_steps,
+            callbacks           = set_callback(),
+            verbose             = 2,
+            shuffle             = SHUFFLE
+    )
+
+    return history
+
+
+def train_from_memory( model ):
+    """ -----------------------------------------------------------------------------------------------------
+    Training procedure with data in memory
+
+    model:          [keras.engine.training.Model]
 
     return:         [keras.callbacks.History]
     ----------------------------------------------------------------------------------------------------- """
@@ -135,20 +241,38 @@ def train_model( model, tlog ):
     train_samples           = len( train_set[ 0 ] )
     valid_samples           = len( valid_set[ 0 ] )
 
-    t_start                 = datetime.datetime.now()       # starting time of execution
-
     history                 = model.fit(
             x                   = train_set[ 0 ],
             y                   = train_set[ 1 ],
             batch_size          = cnfg[ 'batch_size' ],
             epochs              = cnfg[ 'n_epochs' ],
             validation_data     = valid_set,
-#           steps_per_epoch     = train_samples // cnfg[ 'batch_size' ],
-#           validation_steps    = valid_samples // cnfg[ 'batch_size' ],
             callbacks           = set_callback(),
             verbose             = 2,
             shuffle             = SHUFFLE
     )
+
+    return history
+
+
+def train_model( model, tlog ):
+    """ -----------------------------------------------------------------------------------------------------
+    Training procedure, using datasets that can be loaded in memory, or flowing files from disk
+
+    NOTE: the choice between memory/disk is simply inferred from the name of the dataset: if
+    it has the extension of a compressed file it is loaded in memory, otherwise it is assumed
+    as the root directory of a dataset tree that adhers  to Keras conventions
+
+    model:          [keras.engine.training.Model]
+    tlog:           [str] path to log file
+
+    return:         [keras.callbacks.History]
+    ----------------------------------------------------------------------------------------------------- """
+    t_start = datetime.datetime.now()       # starting time of execution
+    if cond_mem( cnfg[ 'dir_dset' ] ):
+        history     = train_from_memory( model )
+    else:
+        history     = train_from_disk( model )
 
     t_end   = datetime.datetime.now()                           # end time of execution
 
