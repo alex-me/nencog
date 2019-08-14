@@ -115,7 +115,8 @@ def get_sample( img, obj, box ):
     """
     get samples displacing a box around the given one, and saving the samples as image files
     the size of the samples is forced to be standard, centered horizontally with respect to
-    the given box (but not vertically)
+    the given box, and vertically for the categories 'bag' and 'telescope'
+    the reason is that those two objects are smaller and with a variable size of the annotate coordinates
     """
     x0, y0, x1, y1  = box
     var             = var_span[ obj ]
@@ -124,6 +125,10 @@ def get_sample( img, obj, box ):
     out_dir         = os.path.join( sdir, obj )
     x_c             = ( x0 + x1 ) / 2.
     x0              = int( x_c - width / 2. )
+    if obj in ( 'bag', 'telescope' ):
+        y_c             = ( y0 + y1 ) / 2.
+        y0              = int( y_c - height / 2. )
+
 
     for x in var:
         s_x0    = x0 + x
