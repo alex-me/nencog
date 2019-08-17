@@ -29,6 +29,10 @@ found in a LAVA scene. Results of the localization of objects are fed to Nengo
 categories that play a syntactic role in the LAVA sentence, embedded in the
 `spa.State` Semantic Pointers, is the key for guessing the correct syntactic
 representation of the ambiguous sentence.
+The class `Nn` comprises two separated Nengo models: a `nengo.Network` with
+`nengo_dl.TensorNode` collecting results of the Keras models, and a
+`spa.Network` using SPA states, for cdisambiguating the sentences based on
+visual processing.
 
 *	[lava_geo.py](./lava_geo.py) is a module, need by
 [kspa_model.py](./kspa_model.py), providing all the necessary information about
@@ -51,11 +55,16 @@ Its usage can be obtained with:
 python exec_kspa.py -h
 ```
 
+*	[exec_keras.py](exec_keras.py) is a script that executes the Keras part
+of the modle, computing probabilities for all LAVA images relevant for a list of
+sentences, and storing the results in files. This is a sort of batch execution
+of the most time consuming conputation, which is invariant with respect to the
+evolution of SPA states in the full Nengo model.
+By executing [exec_kspa.py](./exec_kspa.py) with the flag `-b` only the SPA
+model will be executed, and the probabilities of object presence derived by
+Keras models, will be read from files.
 
-*Note:* there is currently no working interface to Keras in the stable version
-of nengo-dl, it is necessary to download and install the development version
-`2.2.0.dev0`
 
 *Note:* there was a previous disambiguation script [kn.py](../kn.py), with the
 purpose of debuggind the Nengo-Keras interface, but the Nengo part was
-essential, and the disambiguation dome as post-processing in a non neural way.
+essential, and the disambiguation done as post-processing in a non neural way.

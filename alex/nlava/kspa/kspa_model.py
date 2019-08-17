@@ -14,6 +14,7 @@ model definition, model recall, post-processing of model output for disambiguati
 
 import  os
 import  numpy
+import  h5py
 
 import  nengo
 import  nengo_dl
@@ -22,18 +23,25 @@ import  tensorflow          as tf
 
 import  lava_geo            as lg
 
-from    keras.models        import load_model, clone_model
+from    keras.models            import load_model, clone_model
+from    matplotlib              import pyplot
+from    mpl_toolkits.mplot3d    import Axes3D
 
 """
 globals
 """
 
-verbose     = True                                  # produce display
+NO_GPU      = True                                  # force disabling GPU usage
+
+verbose     = 2                                     # produce Nengo progress bar
+seed        = 1                                     # seed for Nengo networks
+batch_pro   = False                                 # probabilities are batched, and should be read externally
 mod_dir     = "../keras/model_dir"                  # directory with Keras models
+pro_dir     = "prob"                                # directory where to read probabilities in .h5 files
 mname       = "nn_best.h5"                          # standard name of model file
 models      = {}                                    # dictionary with Keras models
-timestep    = 0.01                                  # duration in seconds of a Nengo timestep
-n_tsteps    = 5                                     # number of timesteps in the Nengo simulation
+timestep    = 0.002                                 # duration in seconds of a Nengo timestep
+n_tsteps    = 50                                    # number of timesteps in the Nengo simulation
 methods     = ( "CLOSENESS", "SIMILARITY" )         # methods actually implemented in kspa_model for the
                                                     # evaluation of spatial closeness fo objects
 method      = "CLOSENESS"                           # default method in use
@@ -42,6 +50,13 @@ vocabs      = None                                  # vocabularies
 nn          = None                                  # neural network object
 persons     = [ 'Andrei', 'Danny', 'Yevgeni' ]      # name of possible persons
 preposition = [ 'with' ]                            # prepositions
+colors      = {                                     # colors for plots
+    'person'    : '#3cb371',
+    'chair'     : '#ff69b4',
+    'bag'       : '#dc143c',
+    'telescope' : '#8a2be2'
+}
+plt_alpha   = 0.6                                   # transparency of surfaces for plot
 test_str    = \
     """00022-10300-10390       Danny approached the chair with a yellow bag"""  # chair <-> bag
 test_img    = "00022-10300-10390"
@@ -100,52 +115,82 @@ class Kinter( object ):
 
 class Nn( object ):
     """
-    build the neural network in Nengo
+    build the neural network in Nengo, composed by two models: one using Nengo-DL as
+    interface with Keras, and one using Nengo-SPA for post-processing the vision data
+
     an instance of the class has as main attributes the following:
-        slef.net        the Nengo network
+        slef.dl         the Nengo-DL network
+        slef.spa        the Nengo-SPA network
         self.nodes      a dictionary of the Nengo nodes defined in the network
         self.probes     a dictionary of the Nengo probe objects defined in the network
         self.states     a dictionary of the Nengo spa.State objects
+        self.prob       a dictionary with categories as keys and current probabilities as values
     """
 
-    def probe( self, node, label ):
+    def probe( self, node, label, net='dl' ):
         """
         insert a Nengo probe
         """
+        label   = net + '_' + label
         if label in self.probes:
             raise ValueError( "probe's label {} already in use".format( label ) )
         self.probes[ label ]    = nengo.Probe( node, label=label )
 
-    def inode( self, category='person' ):
+    def inode( self, category='person', net='dl' ):
         """
-        insert a Nengo placeholder input node
+        insert a Nengo placeholder input node, taking into account the correct size
+        and type depending on the network
         """
-        label   = "input_" + category
+        label   = "{}_input_{}".format( net, category )
         if label in self.nodes:
             raise ValueError( "node's label {} already in use".format( label ) )
-        size_in             = numpy.prod( lg.shapes[ category ] )
-        output              = numpy.ones( ( size_in, ) )
+        if net=='dl':
+            size_in             = numpy.prod( lg.shapes[ category ] )
+            output              = numpy.ones( ( size_in, ) )
+        elif net=='spa':
+            output              = lambda t: self.prob[ category ]
+        else:
+            raise ValueError( "unkown netowrk type {} in inode()".format( net ) )
         self.nodes[ label ] = nengo.Node( output=output, label=label )
 
     def knode( self, category='person' ):
         """
         insert a Nengo node for Keras interface
         """
-        if category in self.nodes:
-            raise ValueError( "node's label {} already in use".format( category ) )
+        label               = 'dl_' + category
+        if label in self.nodes:
+            raise ValueError( "node's label {} already in use".format( label ) )
         size_in             = numpy.prod( lg.shapes[ category ] )
         size_out            = lg.n_coords[ category ][ 0 ]
-        label               = category
         node                = Kinter( category )
         self.nodes[ label ] = nengo_dl.TensorNode( node, size_in=size_in, size_out=size_out, label=label )
 
-    def nnode( self, label, size_in, size_out ):
+    def nnode( self, label, size_in, size_out, net='dl' ):
         """
         insert an ordinary Nengo node
         """
+        label   = net + '_' + label
         if label in self.nodes:
             raise ValueError( "node's label {} already in use".format( label ) )
         self.nodes[ label ]    = nengo.Node( node, size_in=size_in, size_out=size_out, label=label )
+
+    def get_node( self, label, net='dl' ):
+        """
+        return a Nengo node
+        """
+        label   = net + '_' + label
+        if label not in self.nodes:
+            raise ValueError( "node {} not found".format( label ) )
+        return self.nodes[ label ]
+
+    def get_probe( self, label, net='dl' ):
+        """
+        return a Nengo node
+        """
+        label   = net + '_' + label
+        if label not in self.probes:
+            raise ValueError( "probes {} not found".format( label ) )
+        return self.probes[ label ]
 
     def state( self, label ):
         """
@@ -169,15 +214,20 @@ class Nn( object ):
         self.probes = {}
         self.nodes  = {}
         self.states = {}
+        self.prob   = {}
         self.v_dim  = list(lg.n_coords.values())[ 0 ][ 0 ]
         self.voc    = spa.Vocabulary( self.v_dim )
-        self.net    = spa.Network( seed=seed, label=label )
-
+        self.dl     = nengo.Network( seed=seed, label='DL'+label )
+        self.spa    = spa.Network( seed=seed+1, label='SPA'+label )
 
         if cats is None:
             self.categories = lg.categories
         else:
             self.categories = cats
+
+        # initialize probabilities
+        for c in self.categories:
+            self.prob[ c ]  = numpy.zeros( ( self.v_dim, ) )
 
         """
         this is the part intended for using a vocabolary, but I have found no ways to use it
@@ -188,21 +238,27 @@ class Nn( object ):
         self.voc.populate( spointers )
         """
 
-        with self.net:
+        with self.dl:
+            net = 'dl'
+            for c in self.categories:
+                inp     = "input_" + c
+                self.inode( c, net=net )
+                self.knode( c )
+                nengo.Connection( self.get_node( inp, net=net ), self.get_node( c, net=net ), synapse=None )
+                self.probe( self.get_node( c, net=net ), c, net=net )
+
+        with self.spa:
+            net = 'spa'
             cfg = nengo.Config( nengo.Ensemble )
             cfg[ nengo.Ensemble ].neuron_type   = nengo.Direct()
             with cfg:
                 for c in self.categories:
                     inp     = "input_" + c
-                    res     = c + "_result"
+                    self.inode( c, net=net )
                     where   = c + "_where"
-                    self.inode( c )
-                    self.knode( c )
                     self.state( c )
-                    nengo.Connection( self.nodes[ inp ], self.nodes[ c ], synapse=None )
-                    nengo.Connection( self.nodes[ c ], self.states[ c ].input )
-                    self.probe( self.nodes[ c ], res )
-                    self.probe( self.states[ c ].output, where )
+                    nengo.Connection( self.get_node( inp, net=net ), self.states[ c ].input )
+                    self.probe( self.states[ c ].output, where, net=net )
 
 
 
@@ -214,12 +270,16 @@ def setup():
     global models
     global nn
 
+    if NO_GPU:
+        os.environ["CUDA_DEVICE_ORDER"]     = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"]  = ""
+
     lg.setup()
 
     for c in lg.categories:
         models[ c ] = load_model( os.path.join( mod_dir, c, mname ) )
 
-    nn      = Nn()
+    nn      = Nn( seed=seed )
 
 
 def read_sentence( sentence ):
@@ -262,7 +322,6 @@ def ambigue( comp, cats ):
     NOTE: this function is useful only when the three relevent objects in
     the scene are different
     """
-
     a   = []
     for c in cats.keys():
         if c == comp: continue
@@ -271,21 +330,17 @@ def ambigue( comp, cats ):
     return a
 
 
-def in_windows( imgs, n_tsteps=n_tsteps ):
+def in_windows( imgs ):
     """
     distribute the windows read from a LAVA image as input to the neural model
-    NOTE: the data are replicate for a number of timestep to allow the SPA
-    component to relax in time, and it seems impossible to run a simulation for more than
-    one step it the input last just one step
     """
     data    = {}
     for c in nn.categories:
         img             = imgs[ c ]
         length          = numpy.prod( img.shape )
         img             = img.reshape( ( length, ) )
-        img             = numpy.tile( img, ( n_tsteps, 1 ) )
-        img             = img.reshape( ( 1, n_tsteps, length ) )
-        i_in            = nn.nodes[ "input_" + c ]
+        img             = img.reshape( ( 1, 1, length ) )
+        i_in            = nn.get_node( "input_" + c, net='dl' )
         data[ i_in ]    = img
     return data
 
@@ -304,14 +359,63 @@ def find_ambigue( sim_data, comp, amb ):
     find the best match for WITH, given the complement comp and the two ambigue
     categories amb
     """
-    s_comp  = sim_data[ nn.probes[ comp + '_where' ] ][ -1 ]
-    s_amb0  = sim_data[ nn.probes[ amb[ 0 ] + '_where' ] ][ -1 ]
-    s_amb1  = sim_data[ nn.probes[ amb[ 1 ] + '_where' ] ][ -1 ]
+    s_comp  = sim_data[ nn.get_probe( comp + '_where', net='spa' ) ][ -1 ]
+    s_amb0  = sim_data[ nn.get_probe( amb[ 0 ] + '_where', net='spa' ) ][ -1 ]
+    s_amb1  = sim_data[ nn.get_probe( amb[ 1 ] + '_where', net='spa' ) ][ -1 ]
     if method == 'SIMILARITY':
         r   = spa.similarity( s_comp, [ s_amb0, s_amb1 ], normalize=True )
         return  r.argmax()
     if method == 'CLOSENESS':
         return  closest( s_comp, s_amb0, s_amb1 )
+
+
+def recall_dl( data ):
+    """
+    recall the nengo DL network and return the simulation data
+    """
+    p   = {}
+    pb  = verbose >= 2
+    with nengo_dl.Simulator( nn.dl, progress_bar=pb ) as sim:
+        sim.step( data=data )
+        for c in nn.categories:
+            probe   = nn.get_probe( c, 'dl' )
+            p[ c ]  = sim.data[ probe ][ 0 ]
+    return p
+
+
+def read_prob( image ):
+    """
+    read probability data precomputed and stored in h5 files
+    """
+    fname   = os.path.join( pro_dir, image + '.h5' )
+    if not os.path.isfile( fname ):
+        print( "Error: file {} not found".format( fname ) )
+        sys.exit()
+    f       = h5py.File( fname, 'r' )
+    p       = {}
+    for c in nn.categories:
+        if c not in f.keys():
+            print( "Error: category {} not found in h5 file".format( c ) )
+            sys.exit()
+        # NOTE: this fancy coding is required by last h5py versions, the
+        # older f[ c ].value is now deprecated
+        p[ c ]  = f[ c ][ () ]
+
+    return p
+
+
+def recall_spa( prob ):
+    """
+    recall the nengo SPA network and return the simulation data
+
+    input:  [dir] arrays of probabilities for each category
+    """
+    pb  = verbose >= 2
+    for c in nn.categories:
+        nn.prob[ c ]    = prob[ c ]
+    with nengo.Simulator( nn.spa, dt=timestep, progress_bar=pb ) as sim:
+        sim.run( n_tsteps * timestep )
+        return sim
 
 
 def recall_nn( image ):
@@ -320,11 +424,14 @@ def recall_nn( image ):
     """
     if models is None:
         return None
-    imgs    = lg.read_scans( image )
-    data    = in_windows( imgs, n_tsteps=n_tsteps )
-    with nengo_dl.Simulator( nn.net, dt=timestep, progress_bar=verbose ) as sim:
-        sim.run( n_tsteps * timestep, data=data )
-    return sim.data
+    if batch_pro:
+        prob    = read_prob( image )
+    else:
+        imgs    = lg.read_scans( image )
+        data    = in_windows( imgs )
+        prob    = recall_dl( data )
+    sim     = recall_spa( prob )
+    return sim
 
 
 def disambiguate( sentence ):
@@ -342,8 +449,54 @@ def disambiguate( sentence ):
         return None
     nn.categories   = list( cats.keys() )
     sim             = recall_nn( img )
-    hit             = find_ambigue( sim, comp, amb )
+    hit             = find_ambigue( sim.data, comp, amb )
+    sim.close()
     return amb[ hit ], comp
+
+
+def plot_spa( sim_data, comp, amb, sentence ):
+    """
+    find the best match for WITH, given the complement comp and the two ambigue
+    categories amb
+    """
+    fig     = pyplot.figure()
+    plt     = fig.add_subplot( 111, projection='3d' )
+    time    = numpy.linspace( 0, 1000 * n_tsteps * timestep, n_tsteps )
+    space   = lg.x_coordinates
+    fname   = "plspa_{}.pdf".format( sentence.split()[ 0 ] )
+    x, y    = numpy.meshgrid( time, space )
+    xl      = 0.10
+    yl      = 0.90
+    dyl     = 0.05
+    for i, c in enumerate( ( comp, amb[ 0 ], amb[ 1 ] ) ):
+        z   = sim_data[ nn.get_probe( c + '_where', net='spa' ) ]
+        plt.plot_surface( x, y, z.transpose(), color=colors[ c ], alpha=plt_alpha )
+        # NOTE: plot_surface has no label argument, therefore labels are put manually:
+        plt.text2D( xl, yl - i * dyl, c, fontsize='x-small', color=colors[ c ], transform=plt.transAxes )
+    plt.set_xlabel( 'time [msec]' )
+    plt.set_ylabel( 'horiz. space [pixel]' )
+    plt.set_zlabel( 'probability' )
+    plt.tick_params( labelsize='xx-small' )
+    pyplot.savefig( fname )
+    pyplot.close()
+
+
+def evolve_spa( sentence ):
+    """
+    given a LAVA sentence (including the image name), extract from the sentence the
+    objects of interest, apply the nengo network on the relevant image to search the
+    objects, and extract the evolution in time of the SPA states
+    """
+    if models is None:
+        return None
+    img, comp, cats = read_sentence( sentence )
+    amb             = ambigue( comp, cats )
+    if comp is None:
+        return None
+    nn.categories   = list( cats.keys() )
+    sim             = recall_nn( img )
+    plot_spa( sim.data, comp, amb, sentence )
+    sim.close()
 
 
 def init_stat( comp=( 'bag', 'telescope' ), amb=( 'bag', 'person', 'chair' ) ):
@@ -386,5 +539,7 @@ def evaluate( sentences, truths, full=None ):
         if full is not None:
             s   = s.strip().replace( '\t', ' ' )
             full.write( "{:80s}{:10s}{:10s}\t{}\n".format( s, p, t, t==p ) )
+        if verbose:
+            print( "done " + s )
 
     return res

@@ -18,7 +18,6 @@ import  argparse
 
 import  kspa_model
 
-
 def get_args():
     """ -----------------------------------------------------------------------------------------------------
     Parse the command-line arguments defined by flags
@@ -27,6 +26,13 @@ def get_args():
     ----------------------------------------------------------------------------------------------------- """
     parser      = argparse.ArgumentParser()
 
+    parser.add_argument(
+            '-b',
+            '--batch',
+            action          = 'store_true',
+            dest            = 'BATCH',
+            help            = "Probabilities are read externally, from batch executions"
+    )
     parser.add_argument(
             '-e',
             '--eval',
@@ -69,7 +75,7 @@ def get_args():
             action          = 'store',
             dest            = 'NTSTEPS',
             type            = int,
-            default         = 5,
+            default         = 50,
             help            = "number of timesteps in the Nengo simulation"
     )
     parser.add_argument(
@@ -80,6 +86,15 @@ def get_args():
             type            = str,
             default         = None,
             help            = "Pathname of file where results will be written"
+    )
+    parser.add_argument(
+            '-p',
+            '--plot',
+            action          = 'store',
+            dest            = 'PLOT',
+            type            = float,
+            default         = None,
+            help            = "Plot SPA evolution for the specified time [seconds]"
     )
     parser.add_argument(
             '-s',
@@ -102,9 +117,10 @@ def get_args():
     parser.add_argument(
             '-v',
             '--verbose',
-            action          = 'store_true',
+            action          = 'count',
             dest            = 'VERBOSE',
-            help            = "be verbose, display Nengo progress bar"
+            default         = 0,
+            help            = "verbosity level, [-v] minumum messaging, [-vv] display Nengo progress bar"
     )
 
     return vars( parser.parse_args() )
@@ -182,6 +198,10 @@ def print_eval( ref, fout=None ):
 if __name__ == '__main__':
     args    = get_args()
 
+    if args[ 'PLOT' ] is not None and args[ 'TEXT' ] is None:
+        print( "Error: in order to plot SPA you should supply a sentence, using --text" )
+        sys.exit()
+
     if args[ 'EVAL' ] is not None and args[ 'LOAD' ] is None:
         print( "Error: in order to evaluate you should supply a file with sentences, using --load" )
         sys.exit()
@@ -193,14 +213,23 @@ if __name__ == '__main__':
     if args[ 'METHOD' ] not in kspa_model.methods:
         print( "Error: method {} not implemented".format( args[ 'METHOD' ] ) )
         sys.exit()
-    kspa_model.n_tsteps = args[ 'NTSTEPS' ]
-    kspa_model.method   = args[ 'METHOD' ]
-    kspa_model.verbose  = args[ 'VERBOSE' ]
+
+    kspa_model.NO_GPU       = False
+    kspa_model.n_tsteps     = args[ 'NTSTEPS' ]
+    kspa_model.method       = args[ 'METHOD' ]
+    kspa_model.batch_pro    = args[ 'BATCH' ]
+    kspa_model.verbose      = args[ 'VERBOSE' ]
+    if args[ 'PLOT' ] is not None:
+        kspa_model.timestep = args[ 'PLOT' ] / kspa_model.n_tsteps
     kspa_model.setup()
 
     if args[ 'TEXT' ] is not None:
+        if args[ 'PLOT' ] is not None:
+            kspa_model.evolve_spa( args[ 'TEXT' ] )
+            sys.exit()
         res = kspa_model.disambiguate( args[ 'TEXT' ] )
         print( res[ 0 ] + args[ 'SEPARATOR' ] + res[ 1 ] )
+        sys.exit()
 
     if args[ 'LOAD' ] is not None:
         if not os.path.isfile( args[ 'LOAD' ] ):
